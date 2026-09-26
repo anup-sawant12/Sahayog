@@ -1,16 +1,90 @@
-import React from 'react';
-import { X, FileText, Download, Calendar, CheckCircle2, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  X,
+  FileText,
+  Download,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
 import documentApi from '../../services/document.api';
 
-export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = false }) => {
+export const DocumentPreviewModal = ({
+  document,
+  isOpen,
+  onClose,
+  isAdmin = false,
+}) => {
+  const [objectUrl, setObjectUrl] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const activeBlobUrlRef = useRef(null);
+
+  // Revoke object URL helper
+  const cleanupObjectUrl = () => {
+    if (activeBlobUrlRef.current) {
+      URL.revokeObjectURL(activeBlobUrlRef.current);
+      activeBlobUrlRef.current = null;
+    }
+    setObjectUrl(null);
+  };
+
+  const handleClose = () => {
+    cleanupObjectUrl();
+    onClose();
+  };
+
+  const loadDocumentBlob = async () => {
+    if (!document?.id) return;
+
+    cleanupObjectUrl();
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const blob = isAdmin
+        ? await documentApi.viewAdminDocument(document.id)
+        : await documentApi.viewWorkerDocument(document.id);
+
+      const url = URL.createObjectURL(blob);
+      activeBlobUrlRef.current = url;
+      setObjectUrl(url);
+    } catch (err) {
+      console.error('Failed to load document preview:', err);
+      setErrorMessage('Unable to load document');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && document?.id) {
+      loadDocumentBlob();
+    } else {
+      cleanupObjectUrl();
+      setErrorMessage('');
+    }
+
+    return () => {
+      cleanupObjectUrl();
+    };
+  }, [isOpen, document?.id, isAdmin]);
+
   if (!isOpen || !document) return null;
 
-  const fileUrl = isAdmin
-    ? documentApi.getAdminDocumentFileUrl(document.id)
-    : documentApi.getWorkerDocumentFileUrl(document.id);
+  const mime = (document.mimeType || '').toLowerCase();
+  const fileName = (document.fileName || '').toLowerCase();
 
-  const isPdf = document.mimeType === 'application/pdf' || document.fileName?.toLowerCase().endsWith('.pdf');
-  const isImage = document.mimeType?.startsWith('image/') || /\.(jpg|jpeg|png)$/i.test(document.fileName || '');
+  const isPdf = mime === 'application/pdf' || fileName.endsWith('.pdf');
+  const isImage =
+    mime.startsWith('image/') ||
+    fileName.endsWith('.jpg') ||
+    fileName.endsWith('.jpeg') ||
+    fileName.endsWith('.png');
 
   const formatSize = (bytes) => {
     if (!bytes && bytes !== 0) return 'Unknown size';
@@ -30,6 +104,31 @@ export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = fals
     });
   };
 
+  const handleDownload = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
+
+    try {
+      const blob = isAdmin
+        ? await documentApi.downloadAdminDocument(document.id)
+        : await documentApi.downloadWorkerDocument(document.id);
+
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = downloadUrl;
+      a.download = document.fileName || 'document';
+      window.document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Unable to download document file.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -43,14 +142,14 @@ export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = fals
         zIndex: 1000,
         padding: '16px',
       }}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         style={{
           background: '#ffffff',
           borderRadius: '20px',
           width: '100%',
-          maxWidth: '780px',
+          maxWidth: '820px',
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
@@ -63,7 +162,7 @@ export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = fals
         {/* Modal Header */}
         <div
           style={{
-            padding: '20px 24px',
+            padding: '18px 24px',
             borderBottom: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
@@ -82,12 +181,24 @@ export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = fals
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#0284c7',
+                flexShrink: 0,
               }}
             >
               <FileText size={22} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: '17px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  maxWidth: '480px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {document.fileName}
               </h3>
               <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: '#64748b' }}>
@@ -97,11 +208,10 @@ export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = fals
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              download={document.fileName}
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={isDownloading || isLoading}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -113,16 +223,16 @@ export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = fals
                 color: '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                textDecoration: 'none',
-                cursor: 'pointer',
+                cursor: isDownloading || isLoading ? 'not-allowed' : 'pointer',
+                opacity: isDownloading || isLoading ? 0.6 : 1,
               }}
             >
-              <Download size={15} />
-              Download
-            </a>
+              {isDownloading ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              {isDownloading ? 'Downloading...' : 'Download'}
+            </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -134,6 +244,7 @@ export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = fals
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
+              title="Close modal"
             >
               <X size={20} />
             </button>
@@ -151,106 +262,196 @@ export const DocumentPreviewModal = ({ document, isOpen, onClose, isAdmin = fals
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            minHeight: '380px',
+            minHeight: '420px',
+            maxHeight: 'calc(90vh - 140px)',
           }}
         >
-          {isImage ? (
-            <img
-              src={fileUrl}
-              alt={document.fileName}
+          {/* Loading state */}
+          {isLoading && (
+            <div
               style={{
-                maxWidth: '100%',
-                maxHeight: '520px',
-                objectFit: 'contain',
-                borderRadius: '12px',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                color: '#64748b',
+                padding: '40px',
+              }}
+            >
+              <Loader2 size={36} color="#0284c7" className="animate-spin" />
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>Loading document preview...</p>
+            </div>
+          )}
+
+          {/* Error state */}
+          {!isLoading && errorMessage && (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '36px 24px',
+                textAlign: 'center',
                 background: '#ffffff',
+                borderRadius: '16px',
+                border: '1px solid #fee2e2',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+                maxWidth: '440px',
               }}
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                const fallback = e.currentTarget.parentElement.querySelector('.preview-fallback');
-                if (fallback) fallback.style.display = 'flex';
+            >
+              <div
+                style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '16px',
+                  background: '#fef2f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  marginBottom: '14px',
+                }}
+              >
+                <AlertTriangle size={28} />
+              </div>
+              <h4 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 700, color: '#991b1b' }}>
+                Unable to load document
+              </h4>
+              <p style={{ margin: '0 0 18px', fontSize: '13px', color: '#64748b' }}>
+                The document file could not be retrieved from storage. Please verify your connection or try again.
+              </p>
+              <button
+                type="button"
+                onClick={loadDocumentBlob}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '9px 18px',
+                  borderRadius: '10px',
+                  background: '#0284c7',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: '13.5px',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <RefreshCw size={15} />
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Success state - Image Preview */}
+          {!isLoading && !errorMessage && objectUrl && isImage && (
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
-            />
-          ) : isPdf ? (
+            >
+              <img
+                src={objectUrl}
+                alt={document.fileName}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '62vh',
+                  objectFit: 'contain',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                  background: '#ffffff',
+                  display: 'block',
+                }}
+              />
+            </div>
+          )}
+
+          {/* Success state - PDF Preview */}
+          {!isLoading && !errorMessage && objectUrl && isPdf && (
             <iframe
-              src={`${fileUrl}#toolbar=0`}
+              src={`${objectUrl}#toolbar=0`}
               title={document.fileName}
               style={{
                 width: '100%',
-                height: '520px',
+                height: '62vh',
                 border: 'none',
                 borderRadius: '12px',
                 background: '#ffffff',
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
               }}
             />
-          ) : null}
+          )}
 
-          {/* Fallback for preview or missing seeded file */}
-          <div
-            className="preview-fallback"
-            style={{
-              display: isImage || isPdf ? 'none' : 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '40px',
-              textAlign: 'center',
-              background: '#ffffff',
-              borderRadius: '16px',
-              border: '1px dashed #cbd5e1',
-              maxWidth: '440px',
-            }}
-          >
+          {/* Fallback for other file types */}
+          {!isLoading && !errorMessage && objectUrl && !isImage && !isPdf && (
             <div
               style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '16px',
-                background: '#e0f2fe',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#0284c7',
-                marginBottom: '16px',
+                padding: '40px',
+                textAlign: 'center',
+                background: '#ffffff',
+                borderRadius: '16px',
+                border: '1px dashed #cbd5e1',
+                maxWidth: '440px',
               }}
             >
-              <FileText size={32} />
+              <div
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '16px',
+                  background: '#e0f2fe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#0284c7',
+                  marginBottom: '16px',
+                }}
+              >
+                <FileText size={32} />
+              </div>
+              <h4 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                {document.fileName}
+              </h4>
+              <p style={{ margin: '0 0 20px', fontSize: '13px', color: '#64748b' }}>
+                This file format ({document.mimeType}) cannot be directly previewed in the browser. You can download the file to view it.
+              </p>
+              <button
+                type="button"
+                onClick={handleDownload}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 20px',
+                  borderRadius: '10px',
+                  background: '#0284c7',
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Download size={16} />
+                Download Document
+              </button>
             </div>
-            <h4 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
-              {document.fileName}
-            </h4>
-            <p style={{ margin: '0 0 20px', fontSize: '13px', color: '#64748b' }}>
-              Preview is not rendered directly in this browser frame. You can open or download the original file to view it.
-            </p>
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 20px',
-                borderRadius: '10px',
-                background: '#0284c7',
-                color: '#ffffff',
-                fontWeight: 600,
-                fontSize: '14px',
-                textDecoration: 'none',
-              }}
-            >
-              <ExternalLink size={16} />
-              Open In New Tab
-            </a>
-          </div>
+          )}
         </div>
 
         {/* Modal Footer / Metadata */}
         <div
           style={{
-            padding: '16px 24px',
+            padding: '14px 24px',
             borderTop: '1px solid #e2e8f0',
             background: '#ffffff',
             display: 'flex',

@@ -34,8 +34,23 @@ export const documentApi = {
     return response.data;
   },
 
+  // Authenticated View & Download APIs for Worker
+  viewWorkerDocument: async (id) => {
+    const response = await api.get(`/worker/documents/${id}/view`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  downloadWorkerDocument: async (id) => {
+    const response = await api.get(`/worker/documents/${id}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
   getWorkerDocumentFileUrl: (id) => {
-    return `${API_BASE_URL}/worker/documents/${id}/file`;
+    return `${API_BASE_URL}/worker/documents/${id}/view`;
   },
 
   // Admin KYC APIs
@@ -66,8 +81,23 @@ export const documentApi = {
     return response.data;
   },
 
+  // Authenticated View & Download APIs for Admin
+  viewAdminDocument: async (id) => {
+    const response = await api.get(`/admin/documents/${id}/view`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  downloadAdminDocument: async (id) => {
+    const response = await api.get(`/admin/documents/${id}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
   getAdminDocumentFileUrl: (id) => {
-    return `${API_BASE_URL}/admin/documents/${id}/file`;
+    return `${API_BASE_URL}/admin/documents/${id}/view`;
   },
 };
 

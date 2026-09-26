@@ -766,7 +766,7 @@ export const AdminDocuments = () => {
                             }}
                           >
                             <Eye size={13} />
-                            Review
+                            View Document
                           </button>
 
                           {doc.verificationStatus === 'PENDING' && (

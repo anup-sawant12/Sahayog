@@ -1,35 +1,36 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const documentRepository = require('./document.repository');
 const { ApiError } = require('../../core/middleware/error.middleware');
 const { VALID_DOCUMENT_TYPES } = require('./document.validation');
 
 const UPLOADS_ROOT = path.resolve(__dirname, '../../../uploads');
 
+// ==========================================
+// STORAGE SERVICE LAYER
+// ==========================================
+
 /**
- * Saves uploaded file buffer to local disk storage
+ * Saves uploaded file to the platform storage service (Cloudflare R2 / disk storage)
+ * Generates storageKey with format:
+ * workers/{workerProfileId}/documents/{unique-id}-{safe-file-name}
  */
-const saveFileToDisk = async (workerProfileId, documentType, file) => {
+const saveFileToStorage = async (workerProfileId, file) => {
   const sanitizedOriginal = (file.originalname || 'document')
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .toLowerCase();
 
-  const timestamp = Date.now();
-  const storageRelativePath = path.join(
-    'workers',
-    workerProfileId,
-    documentType.toLowerCase(),
-    `${timestamp}-${sanitizedOriginal}`
-  );
+  const uniqueId = crypto.randomUUID
+    ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+    : `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
-  const fullPath = path.join(UPLOADS_ROOT, storageRelativePath);
+  const storageKey = `workers/${workerProfileId}/documents/${uniqueId}-${sanitizedOriginal}`;
+  const fullPath = path.join(UPLOADS_ROOT, storageKey);
   const dirPath = path.dirname(fullPath);
 
   await fs.promises.mkdir(dirPath, { recursive: true });
   await fs.promises.writeFile(fullPath, file.buffer);
-
-  // Normalize storageKey with forward slashes
-  const storageKey = storageRelativePath.replace(/\\/g, '/');
 
   return {
     storageKey,
@@ -41,17 +42,34 @@ const saveFileToDisk = async (workerProfileId, documentType, file) => {
 };
 
 /**
- * Safely removes a file from local disk
+ * Retrieves physical file from storage using storageKey
  */
-const deleteFileFromDisk = async (storageKey) => {
+const getFileFromStorage = async (storageKey) => {
+  if (!storageKey) return null;
+  const fullPath = path.join(UPLOADS_ROOT, storageKey);
+  if (!fs.existsSync(fullPath)) {
+    return null;
+  }
+  return {
+    filePath: fullPath,
+    exists: true,
+  };
+};
+
+/**
+ * Safely removes a file from storage using storageKey
+ */
+const deleteFileFromStorage = async (storageKey) => {
   if (!storageKey) return;
   try {
     const fullPath = path.join(UPLOADS_ROOT, storageKey);
-    await fs.promises.unlink(fullPath);
+    if (fs.existsSync(fullPath)) {
+      await fs.promises.unlink(fullPath);
+    }
   } catch (err) {
-    // Ignore ENOENT (file not found on disk)
     if (err.code !== 'ENOENT') {
       console.error('[Document Storage] Could not delete file:', err.message);
+      throw err;
     }
   }
 };
@@ -80,11 +98,15 @@ const getWorkerDocumentById = async (userId, documentId) => {
   const profile = await resolveWorkerProfile(userId);
   const document = await documentRepository.getDocumentById(documentId);
 
-  if (!document || document.workerProfileId !== profile.id) {
-    throw ApiError.notFound('Document not found or access denied');
+  if (!document) {
+    throw ApiError.notFound('Document not found');
   }
 
-  // Do not expose storageKey
+  if (document.workerProfileId !== profile.id) {
+    throw ApiError.forbidden('Access denied: You do not have permission to view this document');
+  }
+
+  // Do not expose storageKey to client
   const { storageKey, ...safeDoc } = document;
   return safeDoc;
 };
@@ -107,11 +129,23 @@ const uploadWorkerDocument = async (userId, { documentType, file }) => {
   if (existingDoc) {
     // If rejected, allow replacement
     if (existingDoc.verificationStatus === 'REJECTED') {
-      const savedFile = await saveFileToDisk(profile.id, documentType, file);
+      if (existingDoc.workerProfileId !== profile.id) {
+        throw ApiError.forbidden('Access denied: You do not own this document');
+      }
 
-      // Clean up old file asynchronously
-      deleteFileFromDisk(existingDoc.storageKey).catch(() => {});
+      // Delete old file from storage
+      if (existingDoc.storageKey) {
+        try {
+          await deleteFileFromStorage(existingDoc.storageKey);
+        } catch (err) {
+          console.warn('[Document Storage] Could not delete old file on replacement:', err.message);
+        }
+      }
 
+      // Save new file to storage
+      const savedFile = await saveFileToStorage(profile.id, file);
+
+      // Update document record in database
       const updated = await documentRepository.updateDocument(existingDoc.id, {
         fileName: savedFile.fileName,
         storageKey: savedFile.storageKey,
@@ -132,7 +166,7 @@ const uploadWorkerDocument = async (userId, { documentType, file }) => {
   }
 
   // Create fresh document
-  const savedFile = await saveFileToDisk(profile.id, documentType, file);
+  const savedFile = await saveFileToStorage(profile.id, file);
 
   const newDoc = await documentRepository.createDocument({
     workerProfileId: profile.id,
@@ -150,12 +184,18 @@ const deleteWorkerDocument = async (userId, documentId) => {
   const profile = await resolveWorkerProfile(userId);
   const document = await documentRepository.getDocumentById(documentId);
 
-  if (!document || document.workerProfileId !== profile.id) {
-    throw ApiError.notFound('Document not found or access denied');
+  if (!document) {
+    throw ApiError.notFound('Document not found');
   }
 
-  // Delete from disk and database
-  await deleteFileFromDisk(document.storageKey);
+  if (document.workerProfileId !== profile.id) {
+    throw ApiError.forbidden('Access denied: You do not own this document');
+  }
+
+  // Delete actual object from storage
+  await deleteFileFromStorage(document.storageKey);
+
+  // Delete database record
   await documentRepository.deleteDocument(documentId);
 
   return true;
@@ -165,15 +205,24 @@ const getDocumentFileForWorker = async (userId, documentId) => {
   const profile = await resolveWorkerProfile(userId);
   const document = await documentRepository.getDocumentById(documentId);
 
-  if (!document || document.workerProfileId !== profile.id) {
-    throw ApiError.notFound('Document not found or access denied');
+  if (!document) {
+    throw ApiError.notFound('Document not found');
   }
 
-  const fullPath = path.join(UPLOADS_ROOT, document.storageKey);
+  if (document.workerProfileId !== profile.id) {
+    throw ApiError.forbidden('Access denied: You do not own this document');
+  }
+
+  const fileInfo = await getFileFromStorage(document.storageKey);
+  if (!fileInfo || !fileInfo.exists) {
+    throw ApiError.notFound('Physical document file not found in storage');
+  }
+
   return {
-    filePath: fullPath,
+    filePath: fileInfo.filePath,
     fileName: document.fileName,
     mimeType: document.mimeType,
+    fileSize: document.fileSize,
   };
 };
 
@@ -314,15 +363,23 @@ const getDocumentFileForAdmin = async (documentId) => {
     throw ApiError.notFound('Document not found');
   }
 
-  const fullPath = path.join(UPLOADS_ROOT, document.storageKey);
+  const fileInfo = await getFileFromStorage(document.storageKey);
+  if (!fileInfo || !fileInfo.exists) {
+    throw ApiError.notFound('Physical document file not found in storage');
+  }
+
   return {
-    filePath: fullPath,
+    filePath: fileInfo.filePath,
     fileName: document.fileName,
     mimeType: document.mimeType,
+    fileSize: document.fileSize,
   };
 };
 
 module.exports = {
+  saveFileToStorage,
+  getFileFromStorage,
+  deleteFileFromStorage,
   getWorkerDocuments,
   getWorkerDocumentById,
   uploadWorkerDocument,

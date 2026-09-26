@@ -90,6 +90,20 @@ export const adminApi = {
     const response = await api.patch(`/admin/documents/${id}/reject`, { rejectionReason });
     return response.data;
   },
+
+  viewDocument: async (id) => {
+    const response = await api.get(`/admin/documents/${id}/view`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  downloadDocument: async (id) => {
+    const response = await api.get(`/admin/documents/${id}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
 
 export default adminApi;

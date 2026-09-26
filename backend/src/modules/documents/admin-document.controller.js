@@ -85,22 +85,40 @@ const rejectDocument = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/admin/documents/:id/view
+ * Returns physical file with inline Content-Disposition for browser preview
+ */
 const viewDocumentFile = async (req, res, next) => {
   try {
     const documentId = req.params.id;
     const fileInfo = await documentService.getDocumentFileForAdmin(documentId);
 
-    if (!fs.existsSync(fileInfo.filePath)) {
-      return res.status(404).json({
-        success: false,
-        message: 'Physical document file not found on disk',
-      });
-    }
-
-    res.setHeader('Content-Type', fileInfo.mimeType);
+    res.setHeader('Content-Type', fileInfo.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${fileInfo.fileName}"`);
 
     const stream = fs.createReadStream(fileInfo.filePath);
+    stream.on('error', (err) => next(err));
+    stream.pipe(res);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/admin/documents/:id/download
+ * Returns physical file with attachment Content-Disposition for downloading
+ */
+const downloadDocumentFile = async (req, res, next) => {
+  try {
+    const documentId = req.params.id;
+    const fileInfo = await documentService.getDocumentFileForAdmin(documentId);
+
+    res.setHeader('Content-Type', fileInfo.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.fileName}"`);
+
+    const stream = fs.createReadStream(fileInfo.filePath);
+    stream.on('error', (err) => next(err));
     stream.pipe(res);
   } catch (error) {
     next(error);
@@ -114,4 +132,5 @@ module.exports = {
   verifyDocument,
   rejectDocument,
   viewDocumentFile,
+  downloadDocumentFile,
 };

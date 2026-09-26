@@ -737,7 +737,7 @@ export const WorkerDocuments = () => {
                               }}
                             >
                               <Eye size={14} />
-                              View
+                              View Document
                             </button>
                           )}
 

@@ -19,16 +19,22 @@ router.get('/', adminDocumentController.getDocuments);
 // 2. GET /api/admin/documents/stats - Document summary statistics (must be before /:id)
 router.get('/stats', adminDocumentController.getDocumentStats);
 
-// 3. GET /api/admin/documents/:id/file - Stream document file for admin preview
+// 3. GET /api/admin/documents/:id/view - Stream document file for admin inline preview
+router.get('/:id/view', adminDocumentController.viewDocumentFile);
+
+// 4. GET /api/admin/documents/:id/download - Download document file as attachment
+router.get('/:id/download', adminDocumentController.downloadDocumentFile);
+
+// Backward-compatibility: GET /api/admin/documents/:id/file
 router.get('/:id/file', adminDocumentController.viewDocumentFile);
 
-// 4. GET /api/admin/documents/:id - Single document review details
+// 5. GET /api/admin/documents/:id - Single document review details
 router.get('/:id', adminDocumentController.getDocumentById);
 
-// 5. PATCH /api/admin/documents/:id/verify - Approve and verify document
+// 6. PATCH /api/admin/documents/:id/verify - Approve and verify document
 router.patch('/:id/verify', adminDocumentController.verifyDocument);
 
-// 6. PATCH /api/admin/documents/:id/reject - Reject document with required reason
+// 7. PATCH /api/admin/documents/:id/reject - Reject document with required reason
 router.patch(
   '/:id/reject',
   validate(rejectDocumentSchema),
