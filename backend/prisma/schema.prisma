@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  WORKER
+  COOPERATIVE_ADMIN
+  FEDERATION_ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum WorkerVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum CertificationVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum ServicePricingUnit {
+  FIXED
+  HOURLY
+  DAILY
+}
+
+enum ServiceStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ServiceRequestStatus {
+  OPEN
+  MATCHED
+  CANCELLED
+  COMPLETED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+model User {
+  id              String     @id @default(cuid())
+  name            String
+  email           String     @unique
+  phone           String     @unique
+  passwordHash    String
+  role            UserRole   @default(CUSTOMER)
+  status          UserStatus @default(ACTIVE)
+
+  emailVerified   Boolean    @default(false)
+  phoneVerified   Boolean    @default(false)
+
+  lastLoginAt     DateTime?
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  workerProfile   WorkerProfile?
+  serviceRequests ServiceRequest[]
+  customerBookings Booking[] @relation("CustomerBookings")
+
+  @@map("users")
+}
+
+model WorkerProfile {
+  id                 String                    @id @default(cuid())
+  userId             String                    @unique
+
+  bio                String?
+  experienceYears    Int?
+  profilePhotoUrl    String?
+
+  verificationStatus WorkerVerificationStatus @default(PENDING)
+
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workerSkills         WorkerSkill[]
+  workerCertifications WorkerCertification[]
+  workerAvailability   WorkerAvailability[]
+  serviceAreas         WorkerServiceArea[]
+  workerServices       WorkerService[]
+  matchResults         MatchResult[]
+  bookings             Booking[]
+
+  @@map("worker_profiles")
+}
+
+model Skill {
+  id           String        @id @default(cuid())
+  name         String        @unique
+  description  String?
+  isActive     Boolean       @default(true)
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  workerSkills WorkerSkill[]
+
+  @@map("skills")
+}
+
+model WorkerSkill {
+  id              String        @id @default(cuid())
+  workerProfileId String
+  skillId         String
+
+  level           SkillLevel    @default(BEGINNER)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  skill           Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([workerProfileId, skillId])
+  @@index([workerProfileId])
+  @@index([skillId])
+
+  @@map("worker_skills")
+}
+
+model WorkerCertification {
+  id                  String                           @id @default(cuid())
+  workerProfileId     String
+
+  name                String
+  issuingOrganization String
+  certificateNumber   String?
+
+  issueDate           DateTime
+  expiryDate          DateTime?
+
+  documentUrl         String?
+
+  verificationStatus  CertificationVerificationStatus @default(PENDING)
+
+  createdAt            DateTime                        @default(now())
+  updatedAt            DateTime                        @updatedAt
+
+  workerProfile        WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+
+  @@index([workerProfileId])
+  @@index([verificationStatus])
+
+  @@map("worker_certifications")
+}
+
+model WorkerAvailability {
+  id              String        @id @default(cuid())
+  workerProfileId String
+
+  dayOfWeek       DayOfWeek
+  startTime       String
+  endTime         String
+  isAvailable     Boolean       @default(true)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([workerProfileId, dayOfWeek, startTime, endTime])
+  @@index([workerProfileId])
+  @@index([dayOfWeek])
+
+  @@map("worker_availability")
+}
+
+model WorkerServiceArea {
+  id              String        @id @default(cuid())
+  workerProfileId String
+
+  city            String
+  area            String
+  pincode         String
+
+  latitude        Float?
+  longitude       Float?
+
+  serviceRadiusKm Float         @default(10)
+  isPrimary       Boolean       @default(false)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([workerProfileId, city, area, pincode])
+  @@index([workerProfileId])
+  @@index([city])
+  @@index([pincode])
+
+  @@map("worker_service_areas")
+}
+
+model WorkerService {
+  id              String             @id @default(cuid())
+  workerProfileId String
+
+  name            String
+  category        String
+  description     String?
+
+  price           Decimal            @db.Decimal(10, 2)
+  pricingUnit     ServicePricingUnit @default(FIXED)
+
+  durationMinutes Int?
+
+  status          ServiceStatus      @default(ACTIVE)
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+
+  matchResults    MatchResult[]
+  bookings        Booking[]
+
+  @@index([workerProfileId])
+  @@index([category])
+  @@index([status])
+
+  @@map("worker_services")
+}
+
+model ServiceRequest {
+  id              String              @id @default(cuid())
+  customerId      String
+
+  serviceName     String
+  category        String
+  description     String?
+
+  requestedDate   DateTime
+  requestedTime   String
+
+  city            String
+  area            String
+  pincode         String
+
+  latitude        Float?
+  longitude       Float?
+
+  status          ServiceRequestStatus @default(OPEN)
+
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  customer        User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  matchResults    MatchResult[]
+  bookings        Booking[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([category])
+  @@index([requestedDate])
+  @@index([city])
+  @@index([pincode])
+
+  @@map("service_requests")
+}
+
+model MatchResult {
+  id                String          @id @default(cuid())
+  serviceRequestId  String
+  workerProfileId   String
+  workerServiceId   String?
+
+  matchScore        Float           @default(0)
+
+  skillMatch        Boolean         @default(false)
+  serviceMatch      Boolean         @default(false)
+  availabilityMatch Boolean         @default(false)
+  locationMatch     Boolean         @default(false)
+
+  distanceKm        Float?
+
+  createdAt         DateTime        @default(now())
+
+  serviceRequest    ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  workerProfile     WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  workerService     WorkerService? @relation(fields: [workerServiceId], references: [id], onDelete: SetNull)
+
+  @@unique([serviceRequestId, workerProfileId])
+  @@index([serviceRequestId])
+  @@index([workerProfileId])
+  @@index([workerServiceId])
+  @@index([matchScore])
+
+  @@map("match_results")
+}
+
+model Booking {
+  id                 String        @id @default(cuid())
+
+  customerId         String
+  workerProfileId    String
+  workerServiceId    String
+  serviceRequestId   String
+
+  scheduledDate      DateTime
+  scheduledTime      String
+
+  price              Decimal       @db.Decimal(10, 2)
+
+  customerNotes      String?
+
+  status             BookingStatus @default(PENDING)
+
+  cancellationReason String?
+
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  customer           User @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Cascade)
+
+  workerProfile      WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+
+  workerService      WorkerService @relation(fields: [workerServiceId], references: [id], onDelete: Restrict)
+
+  serviceRequest     ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([workerProfileId])
+  @@index([workerServiceId])
+  @@index([serviceRequestId])
+  @@index([status])
+  @@index([scheduledDate])
+
+  @@map("bookings")
+}
