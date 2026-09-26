@@ -75,26 +75,50 @@ enum BookingStatus {
   COMPLETED
 }
 
+enum NotificationType {
+  NEW_BOOKING
+  BOOKING_CONFIRMED
+  BOOKING_REJECTED
+  BOOKING_CANCELLED
+  BOOKING_COMPLETED
+}
+
+enum DocumentType {
+  IDENTITY_PROOF
+  PAN_CARD
+  ADDRESS_PROOF
+  TRADE_CERTIFICATE
+  POLICE_VERIFICATION
+}
+
+enum DocumentVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
 model User {
-  id              String     @id @default(cuid())
-  name            String
-  email           String     @unique
-  phone           String     @unique
-  passwordHash    String
-  role            UserRole   @default(CUSTOMER)
-  status          UserStatus @default(ACTIVE)
+  id               String     @id @default(cuid())
+  name             String
+  email            String     @unique
+  phone            String     @unique
+  passwordHash     String
+  role             UserRole   @default(CUSTOMER)
+  status           UserStatus @default(ACTIVE)
 
-  emailVerified   Boolean    @default(false)
-  phoneVerified   Boolean    @default(false)
+  emailVerified    Boolean    @default(false)
+  phoneVerified    Boolean    @default(false)
 
-  lastLoginAt     DateTime?
+  lastLoginAt      DateTime?
 
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  workerProfile   WorkerProfile?
-  serviceRequests ServiceRequest[]
+  workerProfile    WorkerProfile?
+  serviceRequests  ServiceRequest[]
   customerBookings Booking[] @relation("CustomerBookings")
+
+  notifications    Notification[]
 
   @@map("users")
 }
@@ -112,7 +136,7 @@ model WorkerProfile {
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
 
-  user               User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   workerSkills         WorkerSkill[]
   workerCertifications WorkerCertification[]
@@ -121,6 +145,7 @@ model WorkerProfile {
   workerServices       WorkerService[]
   matchResults         MatchResult[]
   bookings             Booking[]
+  documents            WorkerDocument[]
 
   @@map("worker_profiles")
 }
@@ -174,10 +199,10 @@ model WorkerCertification {
 
   verificationStatus  CertificationVerificationStatus @default(PENDING)
 
-  createdAt            DateTime                        @default(now())
-  updatedAt            DateTime                        @updatedAt
+  createdAt           DateTime                         @default(now())
+  updatedAt           DateTime                         @updatedAt
 
-  workerProfile        WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  workerProfile       WorkerProfile                   @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
 
   @@index([workerProfileId])
   @@index([verificationStatus])
@@ -251,7 +276,7 @@ model WorkerService {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  workerProfile   WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  workerProfile   WorkerProfile      @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
 
   matchResults    MatchResult[]
   bookings        Booking[]
@@ -286,7 +311,7 @@ model ServiceRequest {
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
-  customer        User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer        User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   matchResults    MatchResult[]
   bookings        Booking[]
@@ -318,9 +343,9 @@ model MatchResult {
 
   createdAt         DateTime        @default(now())
 
-  serviceRequest    ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
-  workerProfile     WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
-  workerService     WorkerService? @relation(fields: [workerServiceId], references: [id], onDelete: SetNull)
+  serviceRequest    ServiceRequest  @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+  workerProfile     WorkerProfile   @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  workerService     WorkerService?  @relation(fields: [workerServiceId], references: [id], onDelete: SetNull)
 
   @@unique([serviceRequestId, workerProfileId])
   @@index([serviceRequestId])
@@ -353,13 +378,12 @@ model Booking {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  customer           User @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Cascade)
-
-  workerProfile      WorkerProfile @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
-
-  workerService      WorkerService @relation(fields: [workerServiceId], references: [id], onDelete: Restrict)
-
+  customer           User           @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: Cascade)
+  workerProfile      WorkerProfile  @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+  workerService      WorkerService  @relation(fields: [workerServiceId], references: [id], onDelete: Restrict)
   serviceRequest     ServiceRequest @relation(fields: [serviceRequestId], references: [id], onDelete: Cascade)
+
+  notifications      Notification[]
 
   @@index([customerId])
   @@index([workerProfileId])
@@ -369,4 +393,62 @@ model Booking {
   @@index([scheduledDate])
 
   @@map("bookings")
+}
+
+model Notification {
+  id                String           @id @default(cuid())
+
+  userId            String
+  type              NotificationType
+
+  title             String
+  message           String
+
+  isRead            Boolean          @default(false)
+  readAt            DateTime?
+
+  relatedBookingId  String?
+
+  createdAt         DateTime         @default(now())
+
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relatedBooking    Booking?         @relation(fields: [relatedBookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@index([relatedBookingId])
+  @@index([type])
+
+  @@map("notifications")
+}
+
+model WorkerDocument {
+  id                   String                     @id @default(cuid())
+
+  workerProfileId      String
+
+  documentType         DocumentType
+  fileName             String
+  storageKey           String
+
+  mimeType             String
+  fileSize             Int
+
+  verificationStatus   DocumentVerificationStatus @default(PENDING)
+  rejectionReason      String?
+
+  verifiedAt           DateTime?
+
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  workerProfile        WorkerProfile              @relation(fields: [workerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([workerProfileId, documentType])
+  @@index([workerProfileId])
+  @@index([documentType])
+  @@index([verificationStatus])
+
+  @@map("worker_documents")
 }

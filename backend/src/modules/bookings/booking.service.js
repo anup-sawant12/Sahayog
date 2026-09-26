@@ -1,5 +1,6 @@
 const bookingRepository = require('./booking.repository');
 const { ApiError } = require('../../core/middleware/error.middleware');
+const { notificationService } = require('../notifications');
 
 const formatBooking = (booking) => {
   if (!booking) return null;
@@ -149,6 +150,13 @@ const createBooking = async (customerId, data) => {
     await bookingRepository.updateServiceRequestStatus(serviceRequest.id, 'MATCHED');
   }
 
+  // 16. Trigger notification to worker
+  try {
+    await notificationService.notifyNewBooking(booking);
+  } catch (err) {
+    console.error('Failed to dispatch new booking notification:', err);
+  }
+
   return formatBooking(booking);
 };
 
@@ -181,6 +189,13 @@ const cancelBooking = async (customerId, bookingId, cancellationReason) => {
     'CANCELLED',
     cancellationReason || 'Cancelled by customer'
   );
+
+  // Trigger notification to worker
+  try {
+    await notificationService.notifyBookingCancelled(updatedBooking);
+  } catch (err) {
+    console.error('Failed to dispatch booking cancelled notification:', err);
+  }
 
   return formatBooking(updatedBooking);
 };
@@ -229,6 +244,14 @@ const acceptBooking = async (userId, bookingId) => {
   }
 
   const updatedBooking = await bookingRepository.updateBookingStatus(bookingId, 'CONFIRMED');
+
+  // Trigger notification to customer
+  try {
+    await notificationService.notifyBookingConfirmed(updatedBooking);
+  } catch (err) {
+    console.error('Failed to dispatch booking confirmed notification:', err);
+  }
+
   return formatBooking(updatedBooking);
 };
 
@@ -252,6 +275,13 @@ const rejectBooking = async (userId, bookingId, cancellationReason) => {
     'REJECTED',
     cancellationReason || 'Rejected by worker'
   );
+
+  // Trigger notification to customer
+  try {
+    await notificationService.notifyBookingRejected(updatedBooking);
+  } catch (err) {
+    console.error('Failed to dispatch booking rejected notification:', err);
+  }
 
   return formatBooking(updatedBooking);
 };
@@ -280,6 +310,13 @@ const completeBooking = async (userId, bookingId) => {
     } catch {
       // Ignore if service request is already updated or not found
     }
+  }
+
+  // Trigger notification to customer
+  try {
+    await notificationService.notifyBookingCompleted(updatedBooking);
+  } catch (err) {
+    console.error('Failed to dispatch booking completed notification:', err);
   }
 
   return formatBooking(updatedBooking);

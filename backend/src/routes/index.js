@@ -10,9 +10,16 @@ const { serviceAreaRoutes } = require('../modules/service-areas');
 const { serviceRoutes } = require('../modules/services');
 const { matchingRoutes } = require('../modules/matching');
 const { bookingRoutes } = require('../modules/bookings');
+const { notificationRoutes } = require('../modules/notifications');
+const { adminRoutes } = require('../modules/admin');
+const { workerDocumentRoutes, adminDocumentRoutes } = require('../modules/documents');
 
 router.use('/auth', authRoutes);
+router.use('/admin/documents', adminDocumentRoutes);
+router.use('/admin', adminRoutes);
 router.use('/users', userRoutes);
+router.use('/worker/documents', workerDocumentRoutes);
+router.use('/workers/documents', workerDocumentRoutes);
 router.use('/workers', workerRoutes);
 router.use('/workers/certifications', certificationRoutes);
 router.use('/workers/availability', availabilityRoutes);
@@ -20,6 +27,7 @@ router.use('/workers/service-areas', serviceAreaRoutes);
 router.use('/workers/services', serviceRoutes);
 router.use('/matching', matchingRoutes);
 router.use('/bookings', bookingRoutes);
+router.use('/notifications', notificationRoutes);
 router.use('/', skillRoutes);
 
 module.exports = router;

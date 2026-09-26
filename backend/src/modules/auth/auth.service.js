@@ -76,10 +76,13 @@ const login = async (credentials) => {
   }
 
   // 4. Generate JWT with identity payload
+  const isAdminRole = ['ADMIN', 'SUPER_ADMIN', 'COOPERATIVE_ADMIN', 'FEDERATION_ADMIN'].includes(user.role);
+  const effectiveRole = isAdminRole ? 'ADMIN' : user.role;
+
   const token = jwt.sign(
     {
       userId: user.id,
-      role: user.role,
+      role: effectiveRole,
     },
     JWT_SECRET,
     {
@@ -98,7 +101,7 @@ const login = async (credentials) => {
       name: user.name,
       email: user.email,
       phone: user.phone,
-      role: user.role,
+      role: effectiveRole,
       status: user.status,
       emailVerified: user.emailVerified,
       phoneVerified: user.phoneVerified,

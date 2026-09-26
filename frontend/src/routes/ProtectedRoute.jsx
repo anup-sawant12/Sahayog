@@ -18,7 +18,8 @@ export const ProtectedRoute = ({ allowedRoles = [] }) => {
   }
 
   if (allowedRoles.length > 0 && user && !allowedRoles.includes(user.role)) {
-    return <Navigate to={user.role === 'WORKER' ? '/worker/dashboard' : '/customer/dashboard'} replace />;
+    const target = user.role === 'ADMIN' ? '/admin/dashboard' : user.role === 'WORKER' ? '/worker/dashboard' : '/customer/dashboard';
+    return <Navigate to={target} replace />;
   }
 
   return <Outlet />;

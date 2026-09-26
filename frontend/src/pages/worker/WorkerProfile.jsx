@@ -435,6 +435,56 @@ export const WorkerProfile = () => {
                   </Button>
                 </div>
 
+                {/* KYC & Documents Quick Summary Card */}
+                <div
+                  style={{
+                    marginTop: '16px',
+                    background: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    padding: '20px 24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)',
+                    flexWrap: 'wrap',
+                    gap: '16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: '12px',
+                        background: '#ccfbf1',
+                        color: '#0f766e',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>KYC & Documents</h3>
+                      <p style={{ margin: '3px 0 0', fontSize: '13px', color: '#64748b' }}>
+                        Upload ID, PAN, address & trade documents for platform verification
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    style={{ borderColor: '#0f766e', color: '#0f766e' }}
+                    onClick={() => navigate('/worker/documents')}
+                  >
+                    Manage KYC Documents
+                  </Button>
+                </div>
+
                 {/* Availability Quick Summary Card */}
                 <div
                   style={{

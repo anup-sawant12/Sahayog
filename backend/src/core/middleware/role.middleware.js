@@ -7,7 +7,16 @@ const authorize = (...allowedRoles) => {
       });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRole = req.user.role;
+    const hasRole =
+      allowedRoles.includes(userRole) ||
+      (allowedRoles.includes('ADMIN') &&
+        (userRole === 'ADMIN' ||
+          userRole === 'SUPER_ADMIN' ||
+          userRole === 'COOPERATIVE_ADMIN' ||
+          userRole === 'FEDERATION_ADMIN'));
+
+    if (!hasRole) {
       return res.status(403).json({
         success: false,
         message: 'Access denied',

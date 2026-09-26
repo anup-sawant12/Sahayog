@@ -7,12 +7,14 @@ import availabilityApi from '../../services/availability.api';
 import serviceAreaApi from '../../services/serviceArea.api';
 import skillApi from '../../services/skill.api';
 import certificationApi from '../../services/certification.api';
+import documentApi from '../../services/document.api';
 import bookingApi from '../../services/booking.api';
 import BookingStatusBadge from '../../components/bookings/BookingStatusBadge';
 import { formatDate, formatTime12h, formatPriceUnit } from '../../components/bookings/BookingCard';
 import Button from '../../components/common/Button';
 import Loader from '../../components/common/Loader';
 import WorkerBookingCalendar from '../../components/dashboard/WorkerBookingCalendar';
+import NotificationBell from '../../components/notifications/NotificationBell';
 import {
   ClipboardCheck,
   ClipboardList,
@@ -31,6 +33,7 @@ import {
   MapPin,
   Zap,
   Award,
+  FileCheck,
   User,
   ArrowRight,
 } from 'lucide-react';
@@ -45,6 +48,7 @@ export const WorkerDashboard = () => {
   const [serviceAreas, setServiceAreas] = useState([]);
   const [skills, setSkills] = useState([]);
   const [certifications, setCertifications] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -59,6 +63,7 @@ export const WorkerDashboard = () => {
         areasRes,
         skillsRes,
         certsRes,
+        docsRes,
         bookingsRes,
       ] = await Promise.allSettled([
         workerApi.getWorkerProfile(),
@@ -67,6 +72,7 @@ export const WorkerDashboard = () => {
         serviceAreaApi.getMyServiceAreas(),
         skillApi.getMySkills(),
         certificationApi.getMyCertifications(),
+        documentApi.getMyDocuments(),
         bookingApi.getWorkerBookings(),
       ]);
 
@@ -93,6 +99,10 @@ export const WorkerDashboard = () => {
       if (certsRes.status === 'fulfilled') {
         const certsData = certsRes.value?.data?.certifications || certsRes.value?.data || [];
         setCertifications(Array.isArray(certsData) ? certsData : []);
+      }
+      if (docsRes.status === 'fulfilled') {
+        const docsData = docsRes.value?.data || [];
+        setDocuments(Array.isArray(docsData) ? docsData : []);
       }
       if (bookingsRes.status === 'fulfilled') {
         const bookingsData = bookingsRes.value?.data?.bookings || bookingsRes.value?.data || [];
@@ -261,6 +271,8 @@ export const WorkerDashboard = () => {
             Manage Services
           </Button>
 
+          <NotificationBell />
+
           <Button
             variant="ghost"
             size="large"
@@ -348,28 +360,44 @@ export const WorkerDashboard = () => {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="small"
-          onClick={() => navigate('/worker/profile')}
-          style={{
-            background: '#ffffff',
-            borderColor:
-              verificationStatus === 'APPROVED'
-                ? '#10b981'
-                : verificationStatus === 'REJECTED'
-                ? '#ef4444'
-                : '#f59e0b',
-            color:
-              verificationStatus === 'APPROVED'
-                ? '#065f46'
-                : verificationStatus === 'REJECTED'
-                ? '#991b1b'
-                : '#92400e',
-          }}
-        >
-          View Profile
-        </Button>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <Button
+            variant="outline"
+            size="small"
+            onClick={() => navigate('/worker/documents')}
+            style={{
+              background: '#ffffff',
+              borderColor:
+                verificationStatus === 'APPROVED'
+                  ? '#10b981'
+                  : verificationStatus === 'REJECTED'
+                  ? '#ef4444'
+                  : '#f59e0b',
+              color:
+                verificationStatus === 'APPROVED'
+                  ? '#065f46'
+                  : verificationStatus === 'REJECTED'
+                  ? '#991b1b'
+                  : '#92400e',
+              fontWeight: 700,
+            }}
+          >
+            KYC Documents
+          </Button>
+
+          <Button
+            variant="outline"
+            size="small"
+            onClick={() => navigate('/worker/profile')}
+            style={{
+              background: '#ffffff',
+              borderColor: '#cbd5e1',
+              color: '#334155',
+            }}
+          >
+            View Profile
+          </Button>
+        </div>
       </div>
 
       {/* 3. Performance & Stats Summary */}
@@ -688,6 +716,29 @@ export const WorkerDashboard = () => {
               </div>
               <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>Certifications</div>
               <div style={{ fontSize: '12px', color: '#64748b' }}>{certifications.length} verified</div>
+            </div>
+
+            <div
+              onClick={() => navigate('/worker/documents')}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                padding: '14px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#0d9488')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#e2e8f0')}
+            >
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#ccfbf1', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                <FileCheck size={20} color="#0d9488" />
+              </div>
+              <div style={{ fontWeight: 700, fontSize: '13.5px', color: '#0f172a' }}>Documents / KYC</div>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>
+                {documents.filter((d) => d.verificationStatus === 'VERIFIED').length} of 5 verified
+              </div>
             </div>
 
             <div

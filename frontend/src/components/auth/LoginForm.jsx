@@ -72,7 +72,9 @@ export const LoginForm = () => {
 
       if (res && res.success) {
         const userRole = res.data?.user?.role;
-        if (userRole === 'WORKER') {
+        if (userRole === 'ADMIN') {
+          navigate('/admin/dashboard', { replace: true });
+        } else if (userRole === 'WORKER') {
           navigate('/worker/dashboard', { replace: true });
         } else {
           navigate('/customer/dashboard', { replace: true });

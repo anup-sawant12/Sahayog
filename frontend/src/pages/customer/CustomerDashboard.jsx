@@ -7,6 +7,7 @@ import BookingStatusBadge from '../../components/bookings/BookingStatusBadge';
 import { formatDate, formatTime12h, formatPriceUnit } from '../../components/bookings/BookingCard';
 import Button from '../../components/common/Button';
 import Loader from '../../components/common/Loader';
+import NotificationBell from '../../components/notifications/NotificationBell';
 import {
   Search,
   Calendar,
@@ -173,6 +174,8 @@ export const CustomerDashboard = () => {
               Profile
             </Button>
           </Link>
+
+          <NotificationBell />
 
           <Button
             variant="ghost"

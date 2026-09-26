@@ -8,7 +8,11 @@ const getMyProfile = async (userId) => {
     throw ApiError.notFound('User not found');
   }
 
-  return user;
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'COOPERATIVE_ADMIN', 'FEDERATION_ADMIN'].includes(user.role);
+  return {
+    ...user,
+    role: isAdmin ? 'ADMIN' : user.role,
+  };
 };
 
 const updateMyProfile = async (userId, data) => {
